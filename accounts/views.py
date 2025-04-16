@@ -1,0 +1,375 @@
+import smtplib
+from django.core.mail import send_mail
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login, logout, authenticate
+from django.shortcuts import render, redirect
+from django.urls import reverse
+from django.conf import settings
+from .utils import *
+from .models import *
+from .forms import *
+from django.contrib.auth.hashers import make_password
+from django.contrib.auth import get_user_model
+from django_ratelimit.decorators import ratelimit
+import logging
+from django.http import HttpResponseForbidden
+from django.core.signing import dumps, loads, BadSignature, SignatureExpired
+from django.urls import reverse
+from django.contrib import messages
+
+logger = logging.getLogger(__name__)
+User = get_user_model()
+
+
+
+# Rate limit the signup view to 5 attempts per 10 minutes per IP address
+@ratelimit(key='ip', rate='5/10m', method='POST', block=False)
+def signup(request):
+    if getattr(request, 'limited', False):
+        messages.error(request, "Too many signup attempts. Please try again in a few minutes.")
+        return render(request, 'registration/signup.html', {'form': CustomUserCreationForm()})
+
+    if request.method == 'POST':
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data['email']
+
+            if User.objects.filter(email=email).exists():
+                messages.error(request, "This email is already registered. Please log in.")
+                return redirect('login')
+
+            # Generate a time-sensitive token (valid for 30 minutes)
+            token = dumps(email)  # token includes timestamp
+
+            verification_url = request.build_absolute_uri(
+                reverse('verify_email', kwargs={'token': token})
+            )
+
+            email_sent = send_verification_email(email, verification_url)
+
+            if email_sent:
+                request.session['pending_user_email'] = email  # Just for display purposes
+                return redirect('verification_sent')
+            else:
+                messages.error(request, "Failed to send verification email. Please try again later.")
+                return render(request, 'registration/signup.html', {'form': form})
+    else:
+        initial_data = {'email': request.session.get('pending_user_email', '')}
+        form = CustomUserCreationForm(initial=initial_data)
+
+    return render(request, 'registration/signup.html', {'form': form})
+
+
+def verification_sent(request):
+    email = request.session.get('pending_user_email', '')
+    if not email:
+        return redirect('signup')
+
+    return render(request, 'registration/verification_sent.html', {'email': email})
+
+
+def verify_email(request, token):
+    try:
+        # Try to decode the token with a max age of 1800 seconds (30 minutes)
+        email = loads(token, max_age=1800)
+    except SignatureExpired:
+        messages.error(request, 'Verification link has expired. Please sign up again.')
+        return redirect('signup')
+    except BadSignature:
+        messages.error(request, 'Invalid verification link.')
+        return redirect('signup')
+
+    # Store email in session for the password setup step
+    request.session['verified_email'] = email
+
+    messages.success(request, 'Email verified! Now, set your password.')
+    return redirect('set_password')
+
+
+def set_password(request):
+    email = request.session.get('verified_email')
+
+    if not email:
+        messages.error(request, "Session expired. Please verify your email again.")
+        return redirect('signup')
+
+    # Check if the user already exists (avoid duplicate accounts)
+    if User.objects.filter(email=email).exists():
+        messages.warning(request, "An account with this email already exists. Please log in.")
+        return redirect('login')
+
+    # Create a temporary user object for form validation (with empty names to avoid DB error)
+    temp_user = User(email=email, first_name='', last_name='')
+
+    if request.method == 'POST':
+        form = SetPasswordForm(temp_user, request.POST)
+        if form.is_valid():
+            password = form.cleaned_data['new_password1']
+
+            # Create and save the actual user
+            user = User.objects.create_user(email=email, first_name='', last_name='')
+            user.set_password(password)
+            user.is_active = True
+            user.save()
+
+            # Create user profile and account
+            UserProfile.objects.create(user=user, is_verified=True)
+            Account.objects.create(user=user, balance=0.0)  # Adjust fields as necessary
+
+            # Send the welcome email
+            send_welcome_email(user.email, user.email)
+
+            # Clear session
+            del request.session['verified_email']
+
+            messages.success(request, 'Your password has been set and you are automatically logged in.')
+            user.backend = 'accounts.backends.EmailBackend'
+            login(request, user)
+        else:
+            # Flash each form error
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{error}")
+    else:
+        form = SetPasswordForm(temp_user)
+
+    return render(request, 'registration/set_password.html', {'form': form})
+
+
+
+
+
+@ratelimit(key='ip', rate='3/10m', method='POST', block=False)
+def user_login(request):
+    if getattr(request, 'limited', False):
+        messages.error(request, "Too many login attempts. Please try again in a few minutes.")
+        return render(request, 'registration/login.html', {'form': CustomLoginForm()})
+
+    if request.method == 'POST':
+        form = CustomLoginForm(request.POST)
+        if form.is_valid():
+            email = form.cleaned_data.get('username')
+            password = form.cleaned_data.get('password')
+
+            user = authenticate(username=email, password=password)
+            if user is not None:
+                profile = UserProfile.objects.get(user=user)
+
+                if not profile.is_verified:
+                    messages.error(request, 'Please verify your email first.')
+                    return redirect('login')
+
+                if not user.is_active:
+                    messages.error(request, 'Your account is inactive. Please contact support.')
+                    return redirect('login')
+
+                # Generate OTP
+                otp = profile.generate_otp()
+
+                try:
+                    # Attempt to send OTP email
+                    send_otp_email(user, otp)
+                except Exception as e:
+                    # Log the error for debugging
+                    logger.error(f"Failed to send OTP email to {email}: {str(e)}")
+                    # Inform the user that the OTP email couldn't be sent
+                    messages.error(request, "There was an issue sending the OTP. Please check your network and try again.")
+                    return render(request, 'registration/login.html', {'form': form})
+
+                # Store user ID for session-based OTP tracking
+                request.session['user_id_for_otp'] = str(user.id)
+                messages.info(request, 'An OTP has been sent to your email.')
+                return redirect('verify_otp')
+
+            else:
+                messages.error(request, "Invalid email or password.")
+        else:
+            print(f"Form errors: {form.errors}")
+    else:
+        form = CustomLoginForm()
+
+    return render(request, 'registration/login.html', {'form': form})
+
+
+@ratelimit(key='ip', rate='3/10m', method='POST', block=False)
+def verify_otp(request):
+    if getattr(request, 'limited', False):
+        messages.error(request, "Too many OTP attempts. Please try again later.")
+        return render(request, 'registration/verify_otp.html')
+
+    if request.method == 'POST':
+        otp = request.POST.get('otp')
+        user_id = request.session.get('user_id_for_otp')
+
+        if user_id:
+            try:
+                profile = UserProfile.objects.get(user_id=user_id)
+                if profile.is_otp_valid(otp):
+                    user = profile.user
+
+                    # Optional: check is_active again
+                    if not user.is_active:
+                        messages.error(request, 'Your account is inactive.')
+                        return redirect('login')
+                    
+                    user.backend = 'accounts.backends.EmailBackend'
+                    # Login the user
+                    login(request, user)
+                    del request.session['user_id_for_otp']
+
+                    messages.success(request, 'OTP verified successfully. You are now logged in.')
+                    return redirect('dashboard')
+
+                messages.error(request, 'Invalid or expired OTP.')
+                return redirect('user_login')
+            except UserProfile.DoesNotExist:
+                messages.error(request, 'User session expired or invalid.')
+                return redirect('login')
+
+    return render(request, 'registration/verify_otp.html')
+
+
+
+def user_logout(request):
+    logout(request)
+    messages.info(request, 'You have been logged out successfully.')
+    return redirect('home')  
+
+
+
+@ratelimit(key='ip', rate='5/10m', method='POST', block=False)
+def request_password_reset(request):
+    if getattr(request, 'limited', False):
+        messages.error(request, "Too many password reset requests. Please try again later.")
+        return render(request, 'registration/request_reset.html')
+
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        try:
+            user = User.objects.get(email=email)
+            profile = UserProfile.objects.get(user=user)
+            reset_token = profile.generate_reset_token()
+
+            reset_url = request.build_absolute_uri(f'/accounts/reset-password/{reset_token}/')
+            send_password_reset_email(email, reset_url)
+
+            messages.success(request, 'A password reset link has been sent to your email.')
+            return redirect('request_reset')
+
+        except User.DoesNotExist:
+            messages.info(request, 'If the email is registered a reset link will be sent to it.')
+
+    return render(request, 'registration/request_reset.html')
+
+@ratelimit(key='ip', rate='5/10m', method='POST', block=False)
+def reset_password(request, token):
+    if getattr(request, 'limited', False):
+        messages.error(request, "Too many password reset attempts. Please try again later.")
+        return render(request, 'registration/reset_password.html', {'token': token})
+
+    try:
+        profile = UserProfile.objects.get(reset_token=token)
+        if not profile.is_reset_token_valid(token):
+            messages.error(request, 'Invalid or expired token.')
+            return redirect('request_reset')
+
+        if request.method == 'POST':
+            new_password = request.POST.get('password')
+            confirm_password = request.POST.get('confirm_password')
+
+            if new_password != confirm_password:
+                messages.error(request, 'Passwords do not match.')
+                return redirect(f'/reset-password/{token}/')
+
+            profile.user.password = make_password(new_password)
+            profile.user.save()
+
+            profile.reset_token = None
+            profile.reset_token_expiry = None
+            profile.save()
+
+            messages.success(request, 'Your password has been reset. Please login.')
+            return redirect('login')
+
+    except UserProfile.DoesNotExist:
+        messages.error(request, 'Invalid token.')
+        return redirect('request_reset')
+
+    return render(request, 'registration/reset_password.html', {'token': token})
+
+
+
+
+
+
+@login_required
+def view_account(request, account_id):
+    account = get_object_or_404(Account, id=account_id)
+    if account.user != request.user:  # Ensure the account belongs to the logged-in user
+        return HttpResponseForbidden("You do not have permission to view this account.")
+    return render(request, 'accounts/account_detail.html', {'account': account})
+
+
+@login_required
+def dashboard(request):
+    user = request.user
+
+    # Redirect to set PIN if it’s not set
+    if not user.pin:
+        return redirect('set_pin')
+
+    # If PIN is submitted through the modal
+    if request.method == 'POST' and 'pin' in request.POST:
+        pin = request.POST.get('pin')
+        if user.check_pin(pin):
+            request.session['pin_verified'] = True
+            request.session['pin_success_gif'] = True  # <== Trigger GIF only once
+            messages.success(request, 'PIN verified successfully.')
+            return redirect('dashboard')
+        else:
+            messages.error(request, "Invalid PIN. Please try again.")
+
+    # Determine if success modal should be shown
+    show_success_modal = False
+    if request.session.get('pin_success_gif'):
+        show_success_modal = True
+        del request.session['pin_success_gif']
+
+    try:
+        account = Account.objects.get(user=user)
+    except Account.DoesNotExist:
+        messages.error(request, "Your account could not be found. Please contact support.")
+        return redirect('home')
+
+    transactions = Transaction.objects.filter(account=account).order_by('-timestamp')
+    no_transactions_message = None
+    if not transactions.exists():
+        no_transactions_message = "You haven't made any transactions."
+
+    return render(request, 'accounts/dashboard.html', {
+        'account': account,
+        'transactions': transactions,
+        'no_transactions_message': no_transactions_message,
+        'show_pin_modal': not request.session.get('pin_verified'),
+        'show_success_modal': show_success_modal,
+    })
+
+
+def set_pin(request):
+    if request.method == 'POST':
+        form = PinForm(request.POST)
+        if form.is_valid():
+            pin = form.cleaned_data['pin']
+            user = request.user
+            user.set_pin(pin)  # Save the PIN after hashing
+            messages.success(request, 'Your PIN has been successfully set.')
+            request.session['pin_set_success_gif'] = True  # Set the flag to show the success GIF
+            return redirect('home')  # Redirect to home after setting the PIN
+        else:
+            for error in form.errors.values():
+                messages.error(request, error)
+    else:
+        form = PinForm()
+
+    return render(request, 'set-pin.html', {'form': form})

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <!-- Basic Meta Tags -->
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="Secure Banking System" />
+    <meta name="author" content="" />
+    
+    <title>Bank System | {% block title %}{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="{% static 'images/favicon.png' %}" type="image/x-icon">
+
+    <!-- Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    
+    <!-- Template CSS -->
+    <!-- Bootstrap core CSS -->
+    <link rel="stylesheet" type="text/css" href="{% static 'css/bootstrap.css' %}" />
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Owl Carousel -->
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/assets/owl.carousel.min.css" />
+    <!-- Font Awesome -->
+    <link href="{% static 'css/font-awesome.min.css' %}" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link href="{% static 'css/style.css' %}" rel="stylesheet" />
+    <!-- Responsive CSS -->
+    <link href="{% static 'css/responsive.css' %}" rel="stylesheet" />
+
+    <style>
+      /* Flash Messages */
+      #flash-messages {
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 9999;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 90%;
+          max-width: 600px;
+      }
+
+      .flash-message {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          width: 100%;
+          padding: 12px 20px;
+          margin: 10px 0;
+          border-radius: 5px;
+          font-size: 16px;
+          font-weight: 500;
+          text-align: center;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          position: relative;
+          opacity: 1;
+          transition: opacity 0.5s ease-in-out;
+      }
+
+      /* Flash Message Colors */
+      .flash-message.success { background: #4CAF50; color: white; }  /* Green */
+      .flash-message.error { background: #f44336; color: white; }  /* Red */
+      .flash-message.info { background: #2196F3; color: white; }  /* Blue */
+      .flash-message.warning { background: #ff9800; color: white; }  /* Orange */
+
+      /* Close Button */
+      .close-btn {
+          background: none;
+          border: none;
+          font-size: 20px;
+          color: white;
+          font-weight: bold;
+          cursor: pointer;
+          margin-left: 10px;
+      }
+              /* Navbar container */
+              .bank-navbar {
+                background: linear-gradient(130deg, #231a6f, #0f054c); /* Deep Purple (Indigo) */
+                padding: 12px 40px; /* Padding left and right added */
+              }
+              
+              /* Brand text */
+              .brand-text span {
+                color: #fff;
+                font-weight: bold;
+                font-size: 24px;
+              }
+              
+              /* Nav links */
+              .bank-nav .nav-link {
+                color: #fff !important;
+                font-weight: 500;
+                padding: 10px 16px;
+                transition: background-color 0.3s ease;
+              }
+              
+              /* Hover effect */
+              .bank-nav .nav-link:hover {
+                background-color: rgb(145, 105, 187);
+                color: #fff !important;
+                border-radius: 5px;
+              }
+              
+              /* Active nav item */
+              .bank-nav .nav-active .nav-link {
+                background-color: #34135c;
+                color: #fff !important;
+                border-radius: 5px;
+              }
+              
+              /* Search button styling */
+              .nav-search-btn {
+                background-color: transparent;
+                border: none;
+                color: #fff;
+                font-size: 18px;
+              }
+              
+              /* Hover effect for search icon */
+              .nav-search-btn:hover {
+                color: #ddd;
+              }
+              
+              /* Custom navbar toggler */
+              .custom-toggler {
+                border: none;
+                padding: 5px;
+              }
+              
+              .toggler-icon {
+                color: #fff;
+                font-size: 28px;
+              }
+
+              input, select, textarea {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #d1d5db; /* Gray-300 */
+                border-radius: 4px;
+                outline: none;
+                transition: border-color 0.3s;
+            }
+            
+            input:focus, select:focus, textarea:focus {
+                border-color: #2563eb; /* Blue-600 */
+            }
+            
+            .text-sm.text-red-500 {
+                font-size: 14px;
+                margin-top: 4px;
+            }
+            
+              
+              /* Footer Styling */
+              .footer_section {
+                background-color: #222; /* Dark background */
+                color: #fff !important; /* White text */
+                text-align: center;
+                padding: 15px 0;
+                margin-bottom: 0 !important; /* Remove bottom margin */
+              }
+              
+              
+              /* Target paragraph text inside footer */
+              .footer_section p {
+                color: #fff !important; /* Force all text inside paragraph to be white */
+              }
+              
+              /* Ensure links inside footer are also white */
+              .footer_section p a {
+                color: #fff !important; /* Make "Bank System" white */
+                text-decoration: none;
+                transition: color 0.3s ease;
+              }
+              
+    </style>
+
+    <!-- Block for additional head content -->
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="{% block body_class %}{% endblock %}">
+<!-- Custom Header Section Starts -->
+<header class="custom-header">
+    <nav class="navbar navbar-expand-lg bank-navbar w-100">
+      <a class="navbar-brand brand-text" href="{% url 'home' %}">
+        <span>Bank System</span>
+      </a>
+  
+      <button class="navbar-toggler custom-toggler" type="button" data-toggle="collapse" data-target="#bankNavbar"
+              aria-controls="bankNavbar" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="toggler-icon">☰</span>
+      </button>
+  
+      <div class="collapse navbar-collapse justify-content-end" id="bankNavbar">
+        <ul class="navbar-nav bank-nav align-items-center">
+  
+          <li class="nav-item {% if request.path == '/' %}nav-active{% endif %}">
+            <a class="nav-link" href="{% url 'home' %}">Home</a>
+          </li>
+  
+          {% if user.is_authenticated %}
+          <li class="nav-item">
+            <a class="nav-link" href="#"><i class="fa fa-user"></i> Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#"><i class="fa fa-sign-out"></i> Logout</a>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'login' %}"><i class="fa fa-user"></i> Login</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'signup' %}"><i class="fa fa-user-plus"></i> Sign Up</a>
+          </li>
+          {% endif %}
+  
+          {% comment %} <form class="form-inline search-form ml-3">
+            <button class="btn nav-search-btn" type="submit">
+              <i class="fa fa-search"></i>
+            </button>
+          </form> {% endcomment %}
+  
+        </ul>
+      </div>
+    </nav>
+  </header>
+  <!-- Custom Header Section Ends -->
+  
+  <!-- Flash Messages -->
+<div id="flash-messages">
+  {% if messages %}
+      {% for message in messages %}
+          <div class="flash-message {{ message.tags }}">
+              <span>{{ message }}</span>
+              <button class="close-btn" onclick="this.parentElement.style.display='none';">&times;</button>
+          </div>
+      {% endfor %}
+  {% endif %}
+</div>
+
+  
+
+        <!-- Main Content Block -->
+        {% block hero_content %}{% endblock %}
+    </div>
+
+    <!-- Main Content -->
+    <main class="{% block main_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+
+
+    <!-- Footer Section -->
+    <section class="footer_section">
+        <div class="container">
+            <p>
+                &copy; <span id="displayYear"></span> All Rights Reserved By
+                <a href="{% url 'home' %}">Bank System</a>
+            </p>
+        </div>
+    </section>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+          let flashMessages = document.querySelectorAll('.flash-message');
+  
+          flashMessages.forEach(function(msg) {
+              // Auto-hide after 7 seconds
+              setTimeout(() => {
+                  msg.style.opacity = "0";
+                  setTimeout(() => msg.remove(), 500); // Remove from DOM
+              }, 7000);
+          });
+      });
+  </script>
+  
+
+    <!-- JavaScript Files -->
+    <!-- jQuery -->
+    <script type="text/javascript" src="{% static 'js/jquery-3.4.1.min.js' %}"></script>
+    <!-- Popper JS -->
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <!-- Bootstrap JS -->
+    <script type="text/javascript" src="{% static 'js/bootstrap.js' %}"></script>
+    <!-- Owl Carousel -->
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js"></script>
+    <!-- Custom JS -->
+    <script type="text/javascript" src="{% static 'js/custom.js' %}"></script>
+    
+    <!-- Block for additional scripts -->
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

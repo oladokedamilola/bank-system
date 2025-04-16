@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Bank System{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+    <h2 class="text-2xl font-bold mb-6">Welcome, {{ request.user.username }}!</h2>
+
+    <h3 class="text-xl font-semibold mb-4">Account Details</h3>
+    <p class="mb-2">Account Number: {{ account.account_number }}</p>
+    <p class="mb-4">Balance: ₦{{ account.balance }}</p>
+
+    <h3 class="text-xl font-semibold mb-4">Transaction History</h3>
+    
+    {% if no_transactions_message %}
+        <p class="text-gray-600 italic">{{ no_transactions_message }}</p>
+    {% else %}
+        <ul class="list-disc pl-6">
+            {% for transaction in transactions %}
+                <li class="mb-2">
+                    {{ transaction.transaction_type }} of ₦{{ transaction.amount }} on {{ transaction.timestamp|date:"M d, Y - H:i" }}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <p class="mt-6">
+        <a href="{% url 'logout' %}" class="text-blue-600 hover:underline">Logout</a>
+    </p>
+</div>
+
+{% if show_pin_modal %}
+<!-- Trigger modal on page load -->
+<script>
+    window.addEventListener('DOMContentLoaded', function () {
+        var pinModal = new bootstrap.Modal(document.getElementById('pinModal'));
+        pinModal.show();
+    });
+</script>
+{% endif %}
+
+<!-- PIN Modal -->
+<div class="modal fade" id="pinModal" tabindex="-1" aria-labelledby="pinModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="pinModalLabel">Enter Your PIN</h5>
+        </div>
+        <div class="modal-body">
+          <label for="pin">6-digit PIN</label>
+          <input type="password" id="pin" name="pin" maxlength="6" required class="form-control mt-2" autofocus>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Verify</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if show_success_modal %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const successModal = new bootstrap.Modal(document.getElementById('successGifModal'));
+        successModal.show();
+
+        // Optional auto-hide after 3-4 seconds
+        setTimeout(() => {
+            successModal.hide();
+        }, 4000);
+    });
+</script>
+{% endif %}
+
+<!-- Success GIF Modal -->
+<div class="modal fade" id="successGifModal" tabindex="-1" aria-labelledby="successGifModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-center">
+      <div class="modal-body p-4">
+        <img src="https://media.giphy.com/media/111ebonMs90YLu/giphy.gif" alt="Success" class="img-fluid mb-3" style="max-height: 200px;">
+        <h5 class="mb-0">PIN Verified Successfully!</h5>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

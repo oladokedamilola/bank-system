@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Verification Email Sent{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center bg-gray-50">
+  <div class="max-w-md w-full bg-white p-8 rounded-lg shadow-md">
+    <h2 class="text-center text-2xl font-semibold text-gray-900">Verify Your Email</h2>
+    <p class="mt-4 text-center text-gray-600">
+      We’ve sent a verification email to <strong>{{ email }}</strong>.
+      Please check your inbox and follow the instructions to verify your account.
+    </p>
+    <div class="mt-6 flex justify-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
+        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+      </svg>
+    </div>
+    <p class="mt-4 text-center text-sm text-gray-500">
+      Didn't receive the email? <a href="{% url 'signup' %}" class="text-blue-600 hover:underline">Try signing up again</a>.
+    </p>
+  </div>
+</div>
+{% endblock %}
