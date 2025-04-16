@@ -1,30 +1,15 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 def home(request):
-    # Check if the user is authenticated
     if request.user.is_authenticated:
         user = request.user
-
-        # Check if the user has set their PIN
+        print(f"User PIN: {user.pin}")  
         if not user.pin:
-            # If the user hasn't set a PIN, show the PIN modal
-            return render(request, 'home.html', {'show_pin_modal': True, 'show_success_modal': False})
+            return redirect('set_pin')
 
-        # Check if the success GIF should be shown after the PIN is set
-        show_success_modal = False
-        if request.session.get('pin_set_success_gif'):
-            show_success_modal = True
-            del request.session['pin_set_success_gif']  # Clear the flag after showing the GIF modal
-
-        return render(request, 'home.html', {
-            'show_pin_modal': False,  # Pin modal will not show if the pin is set
-            'show_success_modal': show_success_modal,  # Show success GIF modal if flag is set
-        })
+        return render(request, 'home.html')
     else:
-        # If the user is not authenticated, render the home page without any PIN-related logic
-        return render(request, 'home.html', {
-            'show_pin_modal': False,
-            'show_success_modal': False,
-        })
-
+        return render(request, 'home.html')

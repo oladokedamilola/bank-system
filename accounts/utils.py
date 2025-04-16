@@ -22,7 +22,7 @@ def send_verification_email(email, verification_url):
         # Debugging: Confirm before trying to send the email
         print("Attempting to send email...")
         
-        send_mail(subject, message, settings.EMAIL_HOST_USER, [email])
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
         
         # Debugging: If the email was successfully sent
         print(f"Verification email sent successfully to {email}")
@@ -58,7 +58,7 @@ def send_otp_email(user, otp):
     message = f'Your OTP is: {otp}. It will expire in 10 minutes.'
     
     try:
-        send_mail(subject, message, settings.EMAIL_HOST_USER, [user.email])
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
     except Exception as e:
         logger.error(f"Failed to send OTP email to {user.email}: {e}")  # Log the error
         return False  # Return False to handle failure
@@ -69,10 +69,10 @@ def send_otp_email(user, otp):
 
 def send_password_reset_email(email, reset_url):
     subject = f'Reset Your Password - {settings.APP_NAME}'
-    message = f'Click the link below to reset your password:\n{reset_url}'
+    message = f'Click the link below to reset your password:\n{reset_url}  \n\n\n You can ignore this email if you didn\'t initiate this operation.'
     
     try:
-        send_mail(subject, message, settings.EMAIL_HOST_USER, [email])
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
     except Exception as e:
         logger.error(f"Failed to send password reset email to {email}: {e}")
         return False

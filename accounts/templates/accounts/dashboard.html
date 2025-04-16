@@ -3,70 +3,156 @@
 {% block title %}Dashboard - Bank System{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
-    <h2 class="text-2xl font-bold mb-6">Welcome, {{ request.user.username }}!</h2>
+<style>
+  .modal-backdrop-blur {
+      backdrop-filter: blur(5px);
+      background-color: rgba(0, 0, 0, 0.4);
+  }
 
-    <h3 class="text-xl font-semibold mb-4">Account Details</h3>
-    <p class="mb-2">Account Number: {{ account.account_number }}</p>
-    <p class="mb-4">Balance: ₦{{ account.balance }}</p>
+  .blurred-content {
+      filter: blur(5px);
+      pointer-events: none;
+      user-select: none;
+  }
+</style>
 
-    <h3 class="text-xl font-semibold mb-4">Transaction History</h3>
-    
-    {% if no_transactions_message %}
-        <p class="text-gray-600 italic">{{ no_transactions_message }}</p>
-    {% else %}
-        <ul class="list-disc pl-6">
-            {% for transaction in transactions %}
-                <li class="mb-2">
-                    {{ transaction.transaction_type }} of ₦{{ transaction.amount }} on {{ transaction.timestamp|date:"M d, Y - H:i" }}
-                </li>
-            {% endfor %}
+<!-- Wrapper with Sidebar + Main Content -->
+<div class="min-h-screen flex bg-gray-100">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 bg-white shadow-md p-6 space-y-4 transition-all duration-300 ease-in-out md:block hidden">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
+
+        <ul class="space-y-2">
+            <li>
+                <a href="#" class="block px-3 py-2 rounded-md hover:bg-blue-100 text-blue-600 font-medium">Home</a>
+            </li>
+            <li>
+                <a href="#" class="block px-3 py-2 rounded-md hover:bg-blue-100 text-gray-700">Transactions</a>
+            </li>
+            <li>
+                <a href="#" class="block px-3 py-2 rounded-md hover:bg-blue-100 text-gray-700">Settings</a>
+            </li>
+            <li>
+                <a href="{% url 'logout' %}" class="block px-3 py-2 rounded-md bg-red-500 text-white hover:bg-red-600">Logout</a>
+            </li>
         </ul>
-    {% endif %}
+    </aside>
 
-    <p class="mt-6">
-        <a href="{% url 'logout' %}" class="text-blue-600 hover:underline">Logout</a>
-    </p>
+    <!-- Main Content -->
+    <div class="flex-1 p-6">
+        <!-- Toggle Button -->
+        <button id="toggleSidebar" class="md:hidden mb-4 bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700">
+            Toggle Menu
+        </button>
+
+        <!-- Content Area -->
+        <div class="dashboard-content space-y-8 transition-all duration-300">
+
+            <!-- User Details Card -->
+            <div class="bg-white shadow-md rounded-lg p-6 border border-gray-200">
+                <h2 class="text-2xl font-bold mb-4">Welcome, {{ request.user.username }} 👋</h2>
+
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Account Number</h4>
+                        <p class="text-lg font-semibold">{{ account.account_number }}</p>
+                    </div>
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Current Balance</h4>
+                        <p class="text-lg font-semibold text-green-600">₦{{ account.balance }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction History Card -->
+            <div class="bg-white shadow-md rounded-lg p-6 border border-gray-200">
+                <h3 class="text-xl font-semibold mb-4">Transaction History</h3>
+
+                {% if no_transactions_message %}
+                    <p class="text-gray-500 italic">{{ no_transactions_message }}</p>
+                {% else %}
+                    <ul class="space-y-3">
+                        {% for transaction in transactions %}
+                            <li class="p-4 bg-gray-50 rounded-md border border-gray-100 hover:bg-gray-100 transition">
+                                <span class="block font-medium">
+                                    {{ transaction.transaction_type|title }} of ₦{{ transaction.amount }}
+                                </span>
+                                <span class="text-sm text-gray-500">
+                                    on {{ transaction.timestamp|date:"M d, Y - H:i" }}
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 
-{% if show_pin_modal %}
-<!-- Trigger modal on page load -->
+<!-- Sidebar Toggle Script -->
 <script>
-    window.addEventListener('DOMContentLoaded', function () {
-        var pinModal = new bootstrap.Modal(document.getElementById('pinModal'));
+    document.getElementById('toggleSidebar').addEventListener('click', function () {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('hidden');
+    });
+</script>
+
+<!-- PIN Modal Logic (unchanged) -->
+{% if show_pin_modal %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const pinModal = new bootstrap.Modal(document.getElementById('pinModal'));
+        const content = document.querySelector('.dashboard-content');
+        const modalEl = document.getElementById('pinModal');
+
         pinModal.show();
+        content.classList.add('blurred-content');
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            content.classList.remove('blurred-content');
+        });
+
+        const observer = new MutationObserver(() => {
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.classList.add('modal-backdrop-blur');
+            }
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
     });
 </script>
 {% endif %}
 
 <!-- PIN Modal -->
 <div class="modal fade" id="pinModal" tabindex="-1" aria-labelledby="pinModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <form method="POST">
-        {% csrf_token %}
-        <div class="modal-header">
-          <h5 class="modal-title" id="pinModalLabel">Enter Your PIN</h5>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title" id="pinModalLabel">Enter Your PIN</h5>
+                </div>
+                <div class="modal-body">
+                    <label for="pin">6-digit PIN</label>
+                    <input type="password" id="pin" name="pin" maxlength="6" required class="form-control mt-2" autofocus>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Verify</button>
+                </div>
+            </form>
         </div>
-        <div class="modal-body">
-          <label for="pin">6-digit PIN</label>
-          <input type="password" id="pin" name="pin" maxlength="6" required class="form-control mt-2" autofocus>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Verify</button>
-        </div>
-      </form>
     </div>
-  </div>
 </div>
 
+<!-- Success Modal -->
 {% if show_success_modal %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const successModal = new bootstrap.Modal(document.getElementById('successGifModal'));
         successModal.show();
 
-        // Optional auto-hide after 3-4 seconds
         setTimeout(() => {
             successModal.hide();
         }, 4000);
@@ -74,16 +160,15 @@
 </script>
 {% endif %}
 
-<!-- Success GIF Modal -->
 <div class="modal fade" id="successGifModal" tabindex="-1" aria-labelledby="successGifModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content text-center">
-      <div class="modal-body p-4">
-        <img src="https://media.giphy.com/media/111ebonMs90YLu/giphy.gif" alt="Success" class="img-fluid mb-3" style="max-height: 200px;">
-        <h5 class="mb-0">PIN Verified Successfully!</h5>
-      </div>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center">
+            <div class="modal-body p-4">
+                <img src="https://media.giphy.com/media/111ebonMs90YLu/giphy.gif" alt="Success" class="img-fluid mb-3" style="max-height: 200px;">
+                <h5 class="mb-0">PIN Verified Successfully!</h5>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
 {% endblock %}

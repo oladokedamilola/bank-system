@@ -123,9 +123,15 @@ def set_password(request):
             # Clear session
             del request.session['verified_email']
 
+            # Check if the user has set a PIN
+            if not user.pin:  # If the user has not set a PIN
+                messages.info(request, 'You need to set your PIN before proceeding.')
+                return redirect('set_pin')  # Redirect to the set pin page
+
             messages.success(request, 'Your password has been set and you are automatically logged in.')
             user.backend = 'accounts.backends.EmailBackend'
             login(request, user)
+            return redirect('home')
         else:
             # Flash each form error
             for field, errors in form.errors.items():
@@ -218,6 +224,11 @@ def verify_otp(request):
                     login(request, user)
                     del request.session['user_id_for_otp']
 
+                    # Check if the user has set a PIN
+                    if not user.pin:  # If the user has not set a PIN
+                        messages.info(request, 'You need to set your PIN before proceeding.')
+                        return redirect('set_pin')  # Redirect to the set pin page
+
                     messages.success(request, 'OTP verified successfully. You are now logged in.')
                     return redirect('dashboard')
 
@@ -238,7 +249,7 @@ def user_logout(request):
 
 
 
-@ratelimit(key='ip', rate='5/10m', method='POST', block=False)
+@ratelimit(key='ip', rate='3/10m', method='POST', block=False)
 def request_password_reset(request):
     if getattr(request, 'limited', False):
         messages.error(request, "Too many password reset requests. Please try again later.")
@@ -262,7 +273,9 @@ def request_password_reset(request):
 
     return render(request, 'registration/request_reset.html')
 
-@ratelimit(key='ip', rate='5/10m', method='POST', block=False)
+from django.contrib.auth.forms import SetPasswordForm
+
+@ratelimit(key='ip', rate='3/10m', method='POST', block=False)
 def reset_password(request, token):
     if getattr(request, 'limited', False):
         messages.error(request, "Too many password reset attempts. Please try again later.")
@@ -274,29 +287,33 @@ def reset_password(request, token):
             messages.error(request, 'Invalid or expired token.')
             return redirect('request_reset')
 
+        user = profile.user
+
         if request.method == 'POST':
-            new_password = request.POST.get('password')
-            confirm_password = request.POST.get('confirm_password')
+            form = SetPasswordForm(user, request.POST)
+            if form.is_valid():
+                form.save()  # This sets the password and saves the user
+                # Clear reset token after success
+                profile.reset_token = None
+                profile.reset_token_expiry = None
+                profile.save()
 
-            if new_password != confirm_password:
-                messages.error(request, 'Passwords do not match.')
-                return redirect(f'/reset-password/{token}/')
-
-            profile.user.password = make_password(new_password)
-            profile.user.save()
-
-            profile.reset_token = None
-            profile.reset_token_expiry = None
-            profile.save()
-
-            messages.success(request, 'Your password has been reset. Please login.')
-            return redirect('login')
+                messages.success(request, 'Your password has been reset. Please log in.')
+                return redirect('login')
+            else:
+                # Show form errors
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, error)
+        else:
+            form = SetPasswordForm(user)
 
     except UserProfile.DoesNotExist:
         messages.error(request, 'Invalid token.')
         return redirect('request_reset')
 
-    return render(request, 'registration/reset_password.html', {'token': token})
+    return render(request, 'registration/reset_password.html', {'token': token, 'form': form})
+
 
 
 
@@ -355,21 +372,21 @@ def dashboard(request):
         'show_success_modal': show_success_modal,
     })
 
-
+@login_required
 def set_pin(request):
     if request.method == 'POST':
         form = PinForm(request.POST)
         if form.is_valid():
             pin = form.cleaned_data['pin']
             user = request.user
-            user.set_pin(pin)  # Save the PIN after hashing
+            user.set_pin(pin)  # Make sure set_pin method hashes and saves the PIN
             messages.success(request, 'Your PIN has been successfully set.')
-            request.session['pin_set_success_gif'] = True  # Set the flag to show the success GIF
-            return redirect('home')  # Redirect to home after setting the PIN
+            request.session['pin_set_success_gif'] = True
+            return redirect('home')
         else:
             for error in form.errors.values():
                 messages.error(request, error)
     else:
         form = PinForm()
 
-    return render(request, 'set-pin.html', {'form': form})
+    return render(request, 'accounts/set-pin.html', {'form': form})
