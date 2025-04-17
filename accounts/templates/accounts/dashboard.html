@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Dashboard - Bank System{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
 <style>
@@ -51,7 +51,7 @@
 
             <!-- User Details Card -->
             <div class="bg-white shadow-md rounded-lg p-6 border border-gray-200">
-                <h2 class="text-2xl font-bold mb-4">Welcome, {{ request.user.username }} 👋</h2>
+                <h2 class="text-2xl font-bold mb-4">Welcome, {{ bio_data.first_name }} 👋</h2>
 
                 <div class="grid sm:grid-cols-2 gap-4">
                     <div>
@@ -64,6 +64,65 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Biodata Card -->
+            {% if bio_data %}
+            <div class="bg-white shadow-md rounded-lg p-6 border border-blue-200">
+                <h3 class="text-xl font-semibold text-blue-600 mb-4">Bio Data</h3>
+                <div class="grid md:grid-cols-2 gap-4">
+                    {% if bio_data.first_name %}
+                    <div>
+                        <h4 class="text-gray-600 font-medium">First Name</h4>
+                        <p class="text-lg font-semibold">{{ bio_data.first_name }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if bio_data.last_name %}
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Last Name</h4>
+                        <p class="text-lg font-semibold">{{ bio_data.last_name }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if bio_data.date_of_birth %}
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Date of Birth</h4>
+                        <p class="text-lg font-semibold">{{ bio_data.date_of_birth }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if bio_data.gender %}
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Gender</h4>
+                        <p class="text-lg font-semibold capitalize">{{ bio_data.gender }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if bio_data.phone_number %}
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Phone Number</h4>
+                        <p class="text-lg font-semibold">{{ bio_data.phone_number }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if bio_data.email %}
+                    <div>
+                        <h4 class="text-gray-600 font-medium">Email</h4>
+                        <p class="text-lg font-semibold">{{ bio_data.email }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    {% if bio_data.address %}
+                    <div class="md:col-span-2">
+                        <h4 class="text-gray-600 font-medium">Address</h4>
+                        <p class="text-lg font-semibold">{{ bio_data.address }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+
 
             <!-- Transaction History Card -->
             <div class="bg-white shadow-md rounded-lg p-6 border border-gray-200">

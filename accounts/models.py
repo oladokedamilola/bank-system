@@ -4,6 +4,7 @@ import uuid
 from django.utils.timezone import now
 from datetime import timedelta
 import bcrypt
+import uuid
 
 
 class CustomUserManager(BaseUserManager):
@@ -12,7 +13,7 @@ class CustomUserManager(BaseUserManager):
             raise ValueError("Users must have an email address")
 
         email = self.normalize_email(email)
-        user = self.model(email=email, first_name=first_name, last_name=last_name)
+        user = self.model(email=email)
         if password:
             user.set_password(password)
         else:
@@ -32,13 +33,13 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True)
     email = models.EmailField(unique=True)
-    first_name = models.CharField(max_length=50, blank=True, null=True)
-    last_name = models.CharField(max_length=50, blank=True, null=True)
     is_active = models.BooleanField(default=False)  # Inactive until email is verified
     is_staff = models.BooleanField(default=False)  # Required for admin access
     date_joined = models.DateTimeField(auto_now_add=True)
     pin = models.CharField(max_length=60, blank=True, null=True)  # PIN field for storing hashed PIN
-
+    nin = models.CharField(max_length=11, blank=True, null=True)  # NIN field to link to BioData
+    bvn = models.CharField(max_length=11, blank=True, null=True)  # BVN field to link to BioData
+    
     objects = CustomUserManager()
 
     USERNAME_FIELD = 'email'
@@ -62,7 +63,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return bcrypt.checkpw(raw_pin.encode('utf-8'), self.pin.encode('utf-8'))
 
     def __str__(self):
-        return self.username
+        return self.email
 
 class UserProfile(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE)
@@ -95,6 +96,24 @@ class UserProfile(models.Model):
         return self.reset_token == token and self.reset_token_expiry > now()
 
 
+class BioData(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField('CustomUser', on_delete=models.CASCADE, related_name='bio_data')
+    nin = models.CharField(max_length=11, blank=True, null=True, unique=True)
+    bvn = models.CharField(max_length=11, blank=True, null=True, unique=True)
+
+    # Bio data fields
+    first_name = models.CharField(max_length=50)
+    middle_name = models.CharField(max_length=50, blank=True, null=True)
+    last_name = models.CharField(max_length=50)
+    date_of_birth = models.DateField()
+    address = models.TextField()
+    phone_number = models.CharField(max_length=15)
+
+    verified_on = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.nin or self.bvn})"
 
 
 
@@ -122,3 +141,22 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type} of ${self.amount} on {self.timestamp}"
+
+
+class NINDatabase(models.Model):
+    nin = models.CharField(primary_key=True, max_length=11)
+    first_name = models.CharField(max_length=50)
+    middle_name = models.CharField(max_length=50, blank=True, null=True)
+    last_name = models.CharField(max_length=50)
+    date_of_birth = models.DateField()
+    address = models.TextField()
+    phone_number = models.CharField(max_length=15)
+
+class BVNDatabase(models.Model):
+    bvn = models.CharField(primary_key=True, max_length=11)
+    first_name = models.CharField(max_length=50)
+    middle_name = models.CharField(max_length=50, blank=True, null=True)
+    last_name = models.CharField(max_length=50)
+    date_of_birth = models.DateField()
+    address = models.TextField()
+    phone_number = models.CharField(max_length=15)

@@ -33,6 +33,33 @@
     <link href="{% static 'css/responsive.css' %}" rel="stylesheet" />
 
     <style>
+      /* Style the chatbot interface */
+        .chatbase-embed {
+            width: 280px !important; /* Set a smaller width */
+            height: 350px !important; /* Set a smaller height */
+            position: fixed;
+            bottom: 30px; /* Position it slightly above the bottom of the screen */
+            right: 30px; /* Position it to the right */
+            z-index: 9999; /* Ensure the chat interface is always on top */
+            border-radius: 8px; /* Optional: adds rounded corners */
+        }
+
+        /* Optional: Style the chat button */
+        .chatbase-embed-button {
+            background-color: #2E4053; /* Customize button color */
+            color: #fff !important; /* Button text color */
+            border-radius: 50%; /* Make the button round */
+            width: 60px !important;
+            height: 60px !important;
+            bottom: 30px;
+            right: 30px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Optional: Hover effect for the button */
+        .chatbase-embed-button:hover {
+            background-color: #F8E231; /* Accent color on hover */
+        }
       /* Flash Messages */
       #flash-messages {
           position: fixed;
@@ -158,27 +185,34 @@
             }
             
               
-              /* Footer Styling */
-              .footer_section {
-                background-color: #222; /* Dark background */
-                color: #fff !important; /* White text */
-                text-align: center;
-                padding: 15px 0;
-                margin-bottom: 0 !important; /* Remove bottom margin */
-              }
-              
-              
-              /* Target paragraph text inside footer */
-              .footer_section p {
-                color: #fff !important; /* Force all text inside paragraph to be white */
-              }
-              
-              /* Ensure links inside footer are also white */
-              .footer_section p a {
-                color: #fff !important; /* Make "Bank System" white */
-                text-decoration: none;
-                transition: color 0.3s ease;
-              }
+            /* Clean Footer Styling */
+            .footer {
+              background-color: #222;
+              color: #fff !important;
+              text-align: center;
+              padding: 10px 0; /* Reduced height */
+              margin: 0;
+            }
+            
+            /* Paragraph inside footer */
+            .footer p {
+              margin: 0; /* Remove extra spacing */
+              color: #fff !important;
+              font-size: 14px;
+            }
+            
+            /* Footer links */
+            .footer a {
+              color: #fff !important;
+              text-decoration: none;
+              font-weight: 500;
+              transition: color 0.3s ease;
+            }
+            
+            .footer a:hover {
+              color: #f8e231; /* Optional: add hover color for branding */
+            }
+            
               
     </style>
 
@@ -257,16 +291,17 @@
         {% block content %}{% endblock %}
     </main>
 
+<!-- Footer Section -->
+<section class="footer">
+  <div class="container">
+      <p>
+          &copy; <span id="displayYear"></span> All Rights Reserved By
+          <a href="{% url 'home' %}">Bank System</a>
+      </p>
+  </div>
+</section>
 
-    <!-- Footer Section -->
-    <section class="footer_section">
-        <div class="container">
-            <p>
-                &copy; <span id="displayYear"></span> All Rights Reserved By
-                <a href="{% url 'home' %}">Bank System</a>
-            </p>
-        </div>
-    </section>
+
 
     <script>
       document.addEventListener("DOMContentLoaded", function() {
@@ -282,6 +317,44 @@
       });
   </script>
   
+  <script>
+    document.getElementById("displayYear").textContent = new Date().getFullYear();
+</script>
+
+
+ <!-- Embed the Chatbase Widget -->
+ <script>
+  (function(){
+      if(!window.chatbase || window.chatbase("getState") !== "initialized"){
+          window.chatbase = (...arguments) => {
+              if(!window.chatbase.q) {
+                  window.chatbase.q = []
+              }
+              window.chatbase.q.push(arguments);
+          };
+          window.chatbase = new Proxy(window.chatbase, {
+              get(target, prop) {
+                  if(prop === "q") {
+                      return target.q;
+                  }
+                  return (...args) => target(prop, ...args);
+              }
+          });
+      }
+      const onLoad = function() {
+          const script = document.createElement("script");
+          script.src = "https://www.chatbase.co/embed.min.js";
+          script.id = "3zBs8RVfQzt4JPMWn-Vc7";
+          script.domain = "www.chatbase.co";
+          document.body.appendChild(script);
+      };
+      if(document.readyState === "complete") {
+          onLoad();
+      } else {
+          window.addEventListener("load", onLoad);
+      }
+  })();
+</script>
 
     <!-- JavaScript Files -->
     <!-- jQuery -->

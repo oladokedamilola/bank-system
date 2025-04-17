@@ -19,27 +19,23 @@
       <div class="mb-4 bg-red-50 border-l-4 border-red-500 p-4">
         <div class="flex">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
             </svg>
           </div>
           <div class="ml-3">
-            <p class="text-sm text-red-700">
-              {{ error }}
-            </p>
+            <p class="text-sm text-red-700">{{ error }}</p>
           </div>
         </div>
       </div>
       {% endif %}
 
-      <form class="space-y-6" method="post">
+      <form class="space-y-6" method="post" id="otpForm">
         {% csrf_token %}
         <div>
-          <label for="otp" class="block text-sm font-medium text-gray-700">
-            One-Time Password
-          </label>
+          <label for="otp" class="block text-sm font-medium text-gray-700">One-Time Password</label>
           <div class="mt-1">
-            <input id="otp" name="otp" type="text" required
+            <input id="otp" name="otp" type="text" required maxlength="6"
               class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="Enter 6-digit code">
           </div>
@@ -68,14 +64,99 @@
           </div>
         </div>
 
-        <div class="mt-6">
-          <button type="button"
-            class="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <div class="mt-6 text-center">
+          <span id="resendTimer" class="text-sm text-gray-500">
+            You can request a new code in <span id="countdown">60</span>s
+          </span>
+          <button id="resendBtn"
+            class="mt-2 w-full flex justify-center py-2 px-4 border rounded-md shadow-sm text-sm font-medium text-white bg-gray-400 cursor-not-allowed"
+            disabled>
             Resend OTP
           </button>
         </div>
+        
       </div>
     </div>
   </div>
 </div>
+
+<script>
+  let isFormSubmitting = false;
+
+  // Set flag when user submits form
+  document.getElementById("otpForm").addEventListener("submit", function () {
+    isFormSubmitting = true;
+  });
+
+  // Prompt only if not submitting form
+  window.addEventListener("beforeunload", function (e) {
+    if (!isFormSubmitting) {
+      const confirmationMessage = "Refreshing this page will redirect you back to the login page. Are you sure you want to continue?";
+      e.preventDefault();
+      e.returnValue = confirmationMessage;
+      return confirmationMessage;
+    }
+  });
+
+  // Only redirect if not a form submission
+  window.addEventListener("unload", function () {
+    if (!isFormSubmitting) {
+      window.location.href = "{% url 'login' %}";
+    }
+  });
+
+  // Countdown timer and resend logic (unchanged)
+  let timer = 60;
+  const countdownEl = document.getElementById("countdown");
+  const resendBtn = document.getElementById("resendBtn");
+  const resendTimerText = document.getElementById("resendTimer");
+
+  const countdownInterval = setInterval(() => {
+    timer--;
+    countdownEl.textContent = timer;
+
+    if (timer <= 0) {
+      clearInterval(countdownInterval);
+      resendBtn.disabled = false;
+      resendBtn.textContent = "Resend OTP";
+      resendTimerText.textContent = "You can now request a new OTP:";
+
+      resendBtn.classList.remove("bg-gray-400", "cursor-not-allowed", "text-white");
+      resendBtn.classList.add("bg-blue-600", "hover:bg-blue-700", "text-white", "cursor-pointer");
+    }
+  }, 1000);
+
+  resendBtn.addEventListener("click", function () {
+    resendBtn.disabled = true;
+    resendBtn.textContent = "Resending...";
+    resendBtn.classList.remove("bg-blue-600", "hover:bg-blue-700", "cursor-pointer");
+    resendBtn.classList.add("bg-gray-400", "cursor-not-allowed");
+
+    fetch("{% url 'resend_otp' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": "{{ csrf_token }}",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === "success") {
+        alert("A new OTP has been sent to your email.");
+        location.reload(); // Restart timer
+      } else {
+        alert("Failed to resend OTP: " + data.message);
+        resendBtn.disabled = false;
+        resendBtn.textContent = "Resend OTP";
+      }
+    })
+    .catch(error => {
+      alert("An error occurred. Please try again.");
+      resendBtn.disabled = false;
+      resendBtn.textContent = "Resend OTP";
+    });
+  });
+</script>
+
 {% endblock %}

@@ -1,5 +1,4 @@
 import smtplib
-from django.core.mail import send_mail
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout, authenticate
@@ -9,7 +8,6 @@ from django.conf import settings
 from .utils import *
 from .models import *
 from .forms import *
-from django.contrib.auth.hashers import make_password
 from django.contrib.auth import get_user_model
 from django_ratelimit.decorators import ratelimit
 import logging
@@ -17,6 +15,11 @@ from django.http import HttpResponseForbidden
 from django.core.signing import dumps, loads, BadSignature, SignatureExpired
 from django.urls import reverse
 from django.contrib import messages
+import smtplib
+import socket
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -100,7 +103,7 @@ def set_password(request):
         return redirect('login')
 
     # Create a temporary user object for form validation (with empty names to avoid DB error)
-    temp_user = User(email=email, first_name='', last_name='')
+    temp_user = User(email=email)
 
     if request.method == 'POST':
         form = SetPasswordForm(temp_user, request.POST)
@@ -144,8 +147,6 @@ def set_password(request):
 
 
 
-
-
 @ratelimit(key='ip', rate='3/10m', method='POST', block=False)
 def user_login(request):
     if getattr(request, 'limited', False):
@@ -174,16 +175,19 @@ def user_login(request):
                 otp = profile.generate_otp()
 
                 try:
-                    # Attempt to send OTP email
                     send_otp_email(user, otp)
-                except Exception as e:
-                    # Log the error for debugging
-                    logger.error(f"Failed to send OTP email to {email}: {str(e)}")
-                    # Inform the user that the OTP email couldn't be sent
-                    messages.error(request, "There was an issue sending the OTP. Please check your network and try again.")
+
+                except (smtplib.SMTPException, socket.error, ConnectionError, ImproperlyConfigured) as e:
+                    logger.exception(f"SMTP/Connection error while sending OTP to {email}: {e}")
+                    messages.error(request, "Unable to send OTP email due to a server or network issue. Please try again shortly.")
                     return render(request, 'registration/login.html', {'form': form})
 
-                # Store user ID for session-based OTP tracking
+                except Exception as e:
+                    logger.exception(f"Unexpected error sending OTP to {email}: {e}")
+                    messages.error(request, "An unexpected error occurred while sending your OTP. Please try again later.")
+                    return render(request, 'registration/login.html', {'form': form})
+
+                # Store user ID for OTP verification
                 request.session['user_id_for_otp'] = str(user.id)
                 messages.info(request, 'An OTP has been sent to your email.')
                 return redirect('verify_otp')
@@ -196,6 +200,7 @@ def user_login(request):
         form = CustomLoginForm()
 
     return render(request, 'registration/login.html', {'form': form})
+
 
 
 @ratelimit(key='ip', rate='3/10m', method='POST', block=False)
@@ -240,6 +245,30 @@ def verify_otp(request):
 
     return render(request, 'registration/verify_otp.html')
 
+
+
+@csrf_exempt
+def resend_otp(request):
+    if request.method == 'POST':
+        user_id = request.session.get('user_id_for_otp')
+
+        if not user_id:
+            return JsonResponse({'status': 'error', 'message': 'Session expired. Please log in again.'}, status=400)
+
+        try:
+            user = User.objects.get(pk=user_id)
+            profile = UserProfile.objects.get(user=user)
+
+            # Generate new OTP and send it
+            otp = profile.generate_otp()
+            send_otp_email(user, otp)
+
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            logger.exception(f"Error resending OTP: {e}")
+            return JsonResponse({'status': 'error', 'message': 'Unable to send OTP at this time.'}, status=500)
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method.'}, status=405)
 
 
 def user_logout(request):
@@ -317,9 +346,6 @@ def reset_password(request, token):
 
 
 
-
-
-
 @login_required
 def view_account(request, account_id):
     account = get_object_or_404(Account, id=account_id)
@@ -327,38 +353,44 @@ def view_account(request, account_id):
         return HttpResponseForbidden("You do not have permission to view this account.")
     return render(request, 'accounts/account_detail.html', {'account': account})
 
-
 @login_required
 def dashboard(request):
     user = request.user
 
-    # Redirect to set PIN if it’s not set
+    # Redirect to NIN/BVN verification page if not verified
+    if not hasattr(user, 'bio_data'):
+        return redirect('verify_intro')
+
+    # Redirect to set PIN if not set
     if not user.pin:
         return redirect('set_pin')
 
-    # If PIN is submitted through the modal
+    # Check if PIN is submitted via modal
     if request.method == 'POST' and 'pin' in request.POST:
         pin = request.POST.get('pin')
         if user.check_pin(pin):
             request.session['pin_verified'] = True
-            request.session['pin_success_gif'] = True  # <== Trigger GIF only once
+            request.session['pin_success_gif'] = True
             messages.success(request, 'PIN verified successfully.')
             return redirect('dashboard')
         else:
             messages.error(request, "Invalid PIN. Please try again.")
 
-    # Determine if success modal should be shown
+    # Check if success modal should be shown
     show_success_modal = False
     if request.session.get('pin_success_gif'):
         show_success_modal = True
         del request.session['pin_success_gif']
 
+    # Load account and transactions
     try:
         account = Account.objects.get(user=user)
     except Account.DoesNotExist:
         messages.error(request, "Your account could not be found. Please contact support.")
         return redirect('home')
 
+    # Fetch biodata
+    bio_data = BioData.objects.filter(user=user).first()
     transactions = Transaction.objects.filter(account=account).order_by('-timestamp')
     no_transactions_message = None
     if not transactions.exists():
@@ -370,7 +402,66 @@ def dashboard(request):
         'no_transactions_message': no_transactions_message,
         'show_pin_modal': not request.session.get('pin_verified'),
         'show_success_modal': show_success_modal,
+        'bio_data': bio_data,
     })
+
+
+@login_required
+def verify_intro(request):
+    # Redirect if user is already verified
+    if hasattr(request.user, 'bio_data'):
+        return redirect('dashboard')
+    return render(request, 'accounts/verify_intro.html')
+
+@login_required
+def verify_account(request):
+    user = request.user
+
+    if request.method == 'POST':
+        id_type = request.POST.get('id_type')
+        id_number = request.POST.get('id_number')
+
+        # Simulated delay for the loading spinner
+        import time
+        time.sleep(2)
+
+        record = None
+        if id_type == 'nin':
+            record = NINDatabase.objects.filter(nin=id_number).first()
+        elif id_type == 'bvn':
+            record = BVNDatabase.objects.filter(bvn=id_number).first()
+
+        if record:
+            # Check if already used - check against the correct field based on id_type
+            if id_type == 'nin' and BioData.objects.filter(nin=record.nin).exists():
+                messages.error(request, f"This NIN has already been used.")
+                return redirect('verify_account')
+            elif id_type == 'bvn' and BioData.objects.filter(bvn=record.bvn).exists():
+                messages.error(request, f"This BVN has already been used.")
+                return redirect('verify_account')
+
+            # Create BioData linked to the user
+            BioData.objects.create(
+                user=user,
+                nin=record.nin if id_type == 'nin' else None,
+                bvn=record.bvn if id_type == 'bvn' else None,
+                first_name=record.first_name,
+                middle_name=record.middle_name,
+                last_name=record.last_name,
+                date_of_birth=record.date_of_birth,
+                address=record.address,
+                phone_number=record.phone_number
+            )
+
+            messages.success(request, 'Account verified successfully!')
+            request.session['account_verified'] = True  # To trigger success GIF
+            return redirect('dashboard')
+        else:
+            messages.error(request, f"{id_type.upper()} not found in the system.")
+
+    return render(request, 'accounts/verify_account.html')
+
+
 
 @login_required
 def set_pin(request):
